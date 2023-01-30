@@ -1,0 +1,56 @@
+name: 'Service Deployment'
+on:
+  push:
+    branches:
+      - main
+permissions: write-all
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }}
+    strategy:
+      max-parallel: 1
+      matrix:
+        environment: [ dev, preprod, prod ]
+        include:
+          - environment: dev
+            account_id: ACCNT_ID_WEB_DEV
+            region: us-east-1
+            assume_role_secret: ASSUME_ROLE_WEB_DEV
+          - environment: preprod
+            account_id: ACCNT_ID_WEB_PREPROD
+            region: us-east-1
+            assume_role_secret: ASSUME_ROLE_WEB_PREPROD
+          - environment: prod
+            account_id: ACCNT_ID_WEB_PROD
+            region: us-east-1
+            assume_role_secret: ASSUME_ROLE_WEB_PROD
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        id: checkout
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        id: set-node
+        with:
+          node-version: '16'
+          check-latest: true
+      - name: Configure AWS Credentials
+        id: aws-creds
+        uses: aws-actions/configure-aws-credentials@master
+        with:
+          role-to-assume: ${{ secrets[matrix.assume_role_secret] }}
+          role-duration-seconds: 1200
+          aws-region: ${{ matrix.region }}
+      - name: Install Dependencies
+        id: npm-i
+        run: npm install
+      - name: CDK Deploy
+        id: deploy
+        run: |
+          npx aws-cdk deploy --require-approval never
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+          ACCOUNT_ID: ${{ secrets[matrix.account_id] }}
+          REGION: ${{ matrix.region }}
